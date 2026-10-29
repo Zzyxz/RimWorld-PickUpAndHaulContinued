@@ -1,4 +1,4 @@
-# Pick Up and Haul - Reworked
+# Pick Up and Haul - Continued
 
 Colonists pick up several things into their inventory and haul them to a stockpile in one trip.
 

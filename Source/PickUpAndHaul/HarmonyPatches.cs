@@ -61,7 +61,7 @@ static class HarmonyPatches
 		}
 		catch (Exception e)
 		{
-			Verse.Log.Warning($"Pick Up and Haul - Reworked: could not keep own supplies apart from hauled items. {e.Message}");
+			Verse.Log.Warning($"Pick Up and Haul - Continued: could not keep own supplies apart from hauled items. {e.Message}");
 		}
 
 		RemoveDuplicateHauledComps();
@@ -72,7 +72,7 @@ static class HarmonyPatches
 		harmony.Patch(AccessTools.Method(typeof(JobGiver_Haul), nameof(JobGiver_Haul.TryGiveJob)),
 			transpiler: new(typeof(HarmonyPatches), nameof(JobGiver_Haul_TryGiveJob_Transpiler)));
 
-		Verse.Log.Message("Pick Up and Haul - Reworked welcomes you to RimWorld with pointless logspam.");
+		Verse.Log.Message("Pick Up and Haul - Continued welcomes you to RimWorld with pointless logspam.");
 	}
 
 	private static void Drafted_Prefix(Pawn_DraftController __instance, out bool __state) => __state = __instance.Drafted;

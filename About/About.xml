@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
-	<name>Pick Up and Haul - Reworked</name>
+	<name>Pick Up and Haul - Continued</name>
 	<author>Zzyxzz</author>
 	<packageId>Zzyxzz.PickUpAndHaulReworked</packageId>
-	<url>https://github.com/Zzyxz/RimWorld-PickUpAndHaulReworked</url>
+	<url>https://github.com/Zzyxz/RimWorld-PickUpAndHaulContinued</url>
 	<modVersion>0.3.0</modVersion>
 	<supportedVersions>
 		<li>1.6</li>
@@ -25,11 +25,11 @@
 	</incompatibleWith>
 	<description>Colonists pick up several things into their inventory and haul them to a stockpile in one trip.
 
-A reworked version of Pick Up And Haul by Mehni for RimWorld 1.6 and 1.7. It fixes many bugs of the original and works with Combat Extended again. Colonists keep their own supplies apart from what they haul. Stack Gap, Simple Baby Carry and Achtung are supported, even though they only look for the original mod.
+A continuation of Pick Up And Haul by Mehni for RimWorld 1.6 and 1.7. It fixes many bugs of the original and works with Combat Extended again. Colonists keep their own supplies apart from what they haul. Stack Gap, Simple Baby Carry and Achtung are supported, even though they only look for the original mod.
 
 Use it instead of the original, not together with it. Existing saves keep working when you swap.
 
 Original mod by Mehni, with code from AlexTD, Angelin01, Bradson, simplyWiri, erdelf, Zorba, Why_is_that, Dingo, CodeOptimist, Hanabishi, Madara Uchiha, Ragnar-F and bananasss00. Kept running by Mlie. Released under the MIT licence.
 
-Source code: https://github.com/Zzyxz/RimWorld-PickUpAndHaulReworked</description>
+Source code: https://github.com/Zzyxz/RimWorld-PickUpAndHaulContinued</description>
 </ModMetaData>

@@ -38,7 +38,7 @@ static class StackGapCompat
 		affectDn = dataType == null ? null : AccessTools.Method(dataType, "AffectDn", Type.EmptyTypes);
 		if (patchType == null || find == null || affectUp == null || affectDn == null)
 		{
-			Verse.Log.Warning("Pick Up and Haul - Reworked: Stack Gap support could not be applied.");
+			Verse.Log.Warning("Pick Up and Haul - Continued: Stack Gap support could not be applied.");
 			return;
 		}
 
@@ -48,7 +48,7 @@ static class StackGapCompat
 		}
 		catch (Exception e)
 		{
-			Verse.Log.Warning($"Pick Up and Haul - Reworked: Stack Gap support could not be applied. {e.Message}");
+			Verse.Log.Warning($"Pick Up and Haul - Continued: Stack Gap support could not be applied. {e.Message}");
 			return;
 		}
 
@@ -85,7 +85,7 @@ static class StackGapCompat
 	{
 		if (target == null || postfix == null)
 		{
-			Verse.Log.Warning($"Pick Up and Haul - Reworked: {modName} support could not be applied.");
+			Verse.Log.Warning($"Pick Up and Haul - Continued: {modName} support could not be applied.");
 			return;
 		}
 
@@ -99,7 +99,7 @@ static class StackGapCompat
 		}
 		catch (Exception e)
 		{
-			Verse.Log.Warning($"Pick Up and Haul - Reworked: {modName} support could not be applied. {e.Message}");
+			Verse.Log.Warning($"Pick Up and Haul - Continued: {modName} support could not be applied. {e.Message}");
 		}
 	}
 

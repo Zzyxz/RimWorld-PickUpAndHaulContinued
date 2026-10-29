@@ -151,7 +151,7 @@ internal class CompatHelper
 		{
 			if (ModCompatibilityCheck.CombatExtendedIsActive)
 			{
-				Verse.Log.Warning("Pick Up and Haul - Reworked: this Combat Extended version is not supported. Colonists haul the normal way until an update.");
+				Verse.Log.Warning("Pick Up and Haul - Continued: this Combat Extended version is not supported. Colonists haul the normal way until an update.");
 			}
 			return;
 		}
@@ -183,7 +183,7 @@ internal class CompatHelper
 	{
 		if (target == null || !ready)
 		{
-			Verse.Log.Warning($"Pick Up and Haul - Reworked: Combat Extended support for {postfix.Replace("_Postfix", "")} could not be applied.");
+			Verse.Log.Warning($"Pick Up and Haul - Continued: Combat Extended support for {postfix.Replace("_Postfix", "")} could not be applied.");
 			return;
 		}
 
@@ -193,7 +193,7 @@ internal class CompatHelper
 		}
 		catch (Exception e)
 		{
-			Verse.Log.Warning($"Pick Up and Haul - Reworked: Combat Extended support for {postfix.Replace("_Postfix", "")} could not be applied. {e.Message}");
+			Verse.Log.Warning($"Pick Up and Haul - Continued: Combat Extended support for {postfix.Replace("_Postfix", "")} could not be applied. {e.Message}");
 		}
 	}
 
