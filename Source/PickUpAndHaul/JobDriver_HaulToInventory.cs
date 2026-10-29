@@ -7,7 +7,8 @@ public class JobDriver_HaulToInventory : JobDriver
 	{
 		Log.Message($"{pawn} starting HaulToInventory job: {job.targetQueueA.ToStringSafeEnumerable()}:{job.countQueue.ToStringSafeEnumerable()}");
 		DropUnreservableQueuedTargets();
-		if (!pawn.Reserve(job.targetQueueA[0], job, errorOnFailed: errorOnFailed))
+		var first = job.targetQueueA.NullOrEmpty() ? job.targetA : job.targetQueueA[0];
+		if (!first.HasThing || !first.Thing.Spawned || !pawn.Reserve(first, job, errorOnFailed: errorOnFailed))
 		{
 			return false;
 		}
@@ -17,8 +18,12 @@ public class JobDriver_HaulToInventory : JobDriver
 			return false;
 		}
 
-		pawn.ReserveAsManyAsPossible(job.targetQueueA, job);
-		for (var i = 0; i < job.targetQueueB.Count; i++)
+		if (job.targetQueueA != null)
+		{
+			pawn.ReserveAsManyAsPossible(job.targetQueueA, job);
+		}
+
+		for (var i = 0; i < (job.targetQueueB?.Count ?? 0); i++)
 		{
 			var target = job.targetQueueB[i];
 			if (!IsEnrouteContainer(target) && pawn.CanReserve(target))
@@ -32,6 +37,11 @@ public class JobDriver_HaulToInventory : JobDriver
 	private void DropUnreservableQueuedTargets()
 	{
 		var targets = job.targetQueueA;
+		if (targets == null)
+		{
+			return;
+		}
+
 		var counts = job.countQueue;
 		var aligned = counts != null && counts.Count == targets.Count;
 		for (var i = targets.Count - 1; i >= 1; i--)
