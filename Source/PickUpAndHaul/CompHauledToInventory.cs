@@ -10,6 +10,10 @@ public class CompHauledToInventory : ThingComp
 		return takenToInventory;
 	}
 
+	public bool HasAny => takenToInventory is { Count: > 0 };
+
+	public bool Contains(Thing thing) => takenToInventory != null && takenToInventory.Contains(thing);
+
 	public void RegisterHauledItem(Thing thing) => takenToInventory.Add(thing);
 
 	public override void PostExposeData()
