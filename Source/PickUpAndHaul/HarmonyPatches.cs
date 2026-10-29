@@ -1,5 +1,7 @@
-﻿using System.Reflection;
+﻿using System.Linq;
+using System.Reflection;
 using HarmonyLib;
+using Verse.AI.Group;
 
 namespace PickUpAndHaul;
 [StaticConstructorOnStartup]
@@ -11,6 +13,8 @@ static class HarmonyPatches
 #if DEBUG
 		Harmony.DEBUG = true;
 #endif
+
+		LongEventHandler.ExecuteWhenFinished(() => StackGapCompat.Apply(harmony));
 
 		if (!ModCompatibilityCheck.CombatExtendedIsActive)
 		{
@@ -39,13 +43,172 @@ static class HarmonyPatches
 		harmony.Patch(original: AccessTools.Method(typeof(ITab_Pawn_Gear), nameof(ITab_Pawn_Gear.DrawThingRow)),
 			transpiler: new HarmonyMethod(typeof(HarmonyPatches), nameof(GearTabHighlightTranspiler)));
 
+		if (ModCompatibilityCheck.CombatExtendedIsActive && AccessTools.Method("CombatExtended.ITab_Inventory:DrawThingRowCE") is { } ceDrawThingRow)
+		{
+			harmony.Patch(ceDrawThingRow, transpiler: new HarmonyMethod(typeof(HarmonyPatches), nameof(GearTabHighlightTranspiler)));
+		}
+
+		CompatHelper.ApplyPatches(harmony);
+
+		harmony.Patch(AccessTools.PropertySetter(typeof(Pawn_DraftController), nameof(Pawn_DraftController.Drafted)),
+			prefix: new HarmonyMethod(typeof(HarmonyPatches), nameof(Drafted_Prefix)),
+			postfix: new HarmonyMethod(typeof(HarmonyPatches), nameof(Drafted_Postfix)));
+
+		try
+		{
+			harmony.Patch(AccessTools.Method(typeof(ThingOwner<Thing>), nameof(ThingOwner<Thing>.TryAdd), new[] { typeof(Thing), typeof(bool) }),
+				prefix: new HarmonyMethod(typeof(HarmonyPatches), nameof(InventoryTryAdd_Prefix)));
+		}
+		catch (Exception e)
+		{
+			Verse.Log.Warning($"Pick Up and Haul - Reworked: could not keep own supplies apart from hauled items. {e.Message}");
+		}
+
+		RemoveDuplicateHauledComps();
+
 		harmony.Patch(original: AccessTools.Method(typeof(WorkGiver_Haul), nameof(WorkGiver_Haul.ShouldSkip)),
 			prefix: new HarmonyMethod(typeof(HarmonyPatches), nameof(SkipCorpses_Prefix)));
 
 		harmony.Patch(AccessTools.Method(typeof(JobGiver_Haul), nameof(JobGiver_Haul.TryGiveJob)),
 			transpiler: new(typeof(HarmonyPatches), nameof(JobGiver_Haul_TryGiveJob_Transpiler)));
 
-		Verse.Log.Message("PickUpAndHaul v1.1.2¼ welcomes you to RimWorld with pointless logspam.");
+		Verse.Log.Message("Pick Up and Haul - Reworked welcomes you to RimWorld with pointless logspam.");
+	}
+
+	private static void Drafted_Prefix(Pawn_DraftController __instance, out bool __state) => __state = __instance.Drafted;
+
+	private static void Drafted_Postfix(Pawn_DraftController __instance, bool __state)
+	{
+		var pawn = __instance.pawn;
+		if (__state == __instance.Drafted || pawn is not { Spawned: true } || pawn.inventory == null)
+		{
+			return;
+		}
+
+		if (!__instance.Drafted)
+		{
+			PawnUnloadChecker.QueueUnload(pawn, true);
+			return;
+		}
+
+		if (!Settings.DropHauledWhenDrafted)
+		{
+			return;
+		}
+
+		var hauled = pawn.GetComp<CompHauledToInventory>()?.GetHashSet();
+		if (hauled == null || hauled.Count == 0)
+		{
+			return;
+		}
+
+		var inventory = pawn.inventory.innerContainer;
+		foreach (var thing in hauled.ToList())
+		{
+			if (!thing.Destroyed && inventory.Contains(thing))
+			{
+				inventory.TryDrop(thing, pawn.Position, pawn.Map, ThingPlaceMode.Near, thing.stackCount, out _);
+			}
+		}
+		hauled.RemoveWhere(thing => thing.Destroyed || !inventory.Contains(thing));
+
+		if (ModCompatibilityCheck.CombatExtendedIsActive)
+		{
+			CompatHelper.UpdateInventory(pawn);
+		}
+	}
+
+	private static bool InventoryTryAdd_Prefix(ThingOwner __instance, Thing item, ref bool canMergeWithExistingStacks, ref bool __result)
+	{
+		if (!canMergeWithExistingStacks || item == null || __instance.Owner is not Pawn_InventoryTracker tracker)
+		{
+			return true;
+		}
+
+		var hauled = tracker.pawn?.GetComp<CompHauledToInventory>();
+		if (hauled == null || !hauled.HasAny || !StacksWithHauled(__instance, hauled, item))
+		{
+			return true;
+		}
+
+		canMergeWithExistingStacks = false;
+		if (item.holdingOwner != null || __instance.Contains(item))
+		{
+			return true;
+		}
+
+		for (var i = 0; i < __instance.Count; i++)
+		{
+			var held = __instance.GetAt(i);
+			if (hauled.Contains(held) || !held.CanStackWith(item))
+			{
+				continue;
+			}
+
+			var space = Mathf.Min(item.stackCount, held.def.stackLimit - held.stackCount);
+			if (space <= 0)
+			{
+				continue;
+			}
+
+			var before = held.stackCount;
+			held.TryAbsorbStack(item.SplitOff(space), true);
+			if (held.stackCount > before)
+			{
+				__instance.NotifyAddedAndMergedWith(held, held.stackCount - before);
+			}
+
+			if (item.Destroyed || item.stackCount == 0)
+			{
+				__result = true;
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static bool StacksWithHauled(ThingOwner owner, CompHauledToInventory hauled, Thing item)
+	{
+		for (var i = 0; i < owner.Count; i++)
+		{
+			var held = owner.GetAt(i);
+			if (hauled.Contains(held) && held.CanStackWith(item))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static void RemoveDuplicateHauledComps()
+	{
+		var defs = DefDatabase<ThingDef>.AllDefsListForReading;
+		for (var i = 0; i < defs.Count; i++)
+		{
+			var comps = defs[i].comps;
+			if (comps == null)
+			{
+				continue;
+			}
+
+			var found = false;
+			for (var j = 0; j < comps.Count; j++)
+			{
+				if (comps[j].compClass != typeof(CompHauledToInventory))
+				{
+					continue;
+				}
+
+				if (found)
+				{
+					comps.RemoveAt(j--);
+				}
+				else
+				{
+					found = true;
+				}
+			}
+		}
 	}
 
 	private static bool Drop_Prefix(Pawn pawn, Thing thing)
@@ -89,7 +252,7 @@ static class HarmonyPatches
 		if (__instance.job.haulMode == HaulMode.ToCellStorage
 			&& pawn.Faction == Faction.OfPlayerSilentFail
 			&& Settings.IsAllowedRace(pawn.RaceProps)
-			&& (Settings.AllowCorpses || pawn.carryTracker.CarriedThing is not Corpse)
+			&& (Settings.AllowCorpses || __instance.job.targetA.Thing is not Corpse)
 			&& carriedThing != null
 			&& carriedThing.Count != 0) //deliberate hauling job. Should unload.
 		{
@@ -97,7 +260,13 @@ static class HarmonyPatches
 		}
 	}
 
-	public static void IdleJoy_Postfix(Pawn pawn) => PawnUnloadChecker.CheckIfPawnShouldUnloadInventory(pawn, true);
+	public static void IdleJoy_Postfix(Pawn pawn)
+	{
+		if (pawn?.GetLord() == null)
+		{
+			PawnUnloadChecker.CheckIfPawnShouldUnloadInventory(pawn, true);
+		}
+	}
 
 	public static void DropUnusedInventory_PostFix(Pawn pawn) => PawnUnloadChecker.CheckIfPawnShouldUnloadInventory(pawn);
 
@@ -120,7 +289,7 @@ static class HarmonyPatches
 			return true;
 		}
 
-		if (Settings.AllowCorpses //Don't use the vanilla HaulCorpses WorkGiver if PUAH is allowed to haul those
+		if ((Settings.AllowCorpses && !WorkGiver_HaulToInventory.SkipsPawn(pawn)) //Don't use the vanilla HaulCorpses WorkGiver if PUAH is allowed to haul those
 			|| pawn.Map.listerThings.ThingsInGroup(ThingRequestGroup.Corpse).Count < 1) //...or if there are no corpses to begin with. Indeed Tynan did not foresee this situation
 		{
 			__result = true;
@@ -136,7 +305,7 @@ static class HarmonyPatches
 	public static IEnumerable<CodeInstruction> JobGiver_Haul_TryGiveJob_Transpiler(IEnumerable<CodeInstruction> instructions)
 		=> instructions.MethodReplacer(HaulAIUtility.HaulToStorageJob, HaulToStorageJobByRace);
 
-	public static Job HaulToStorageJobByRace(Pawn p, Thing t, bool forced) => Settings.IsAllowedRace(p.RaceProps) ? HaulToInventoryJob(p, t, forced) : HaulAIUtility.HaulToStorageJob(p, t, forced);
+	public static Job HaulToStorageJobByRace(Pawn p, Thing t, bool forced) => Settings.IsAllowedRace(p.RaceProps) && !CompatHelper.CeUnsupported ? HaulToInventoryJob(p, t, forced) : HaulAIUtility.HaulToStorageJob(p, t, forced);
 	private static Func<Pawn, Thing, bool, Job> HaulToInventoryJob => _haulToInventoryJob ??= new(((WorkGiver_Scanner)DefDatabase<WorkGiverDef>.GetNamed("HaulToInventory").Worker).JobOnThing);
 	private static Func<Pawn, Thing, bool, Job> _haulToInventoryJob;
 
