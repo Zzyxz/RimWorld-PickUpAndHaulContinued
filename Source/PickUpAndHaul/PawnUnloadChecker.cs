@@ -1,53 +1,97 @@
-﻿namespace PickUpAndHaul;
+﻿using Verse.AI.Group;
+
+namespace PickUpAndHaul;
 public class PawnUnloadChecker
 {
-	public static void CheckIfPawnShouldUnloadInventory(Pawn pawn, bool forced = false)
-	{
-		var job = JobMaker.MakeJob(PickUpAndHaulJobDefOf.UnloadYourHauledInventory, pawn);
-		var itemsTakenToInventory = pawn?.GetComp<CompHauledToInventory>();
+	private const int BlockedRetryTicks = 750;
 
+	private static readonly Dictionary<int, int> blockedUntil = new();
+
+	public static void CheckIfPawnShouldUnloadInventory(Pawn pawn, bool forced = false) => QueueUnload(pawn, true);
+
+	public static bool CanUnloadNow(Pawn pawn)
+		=> !pawn.Downed
+		&& !pawn.Dead
+		&& pawn.GetLord() == null
+		&& pawn.CurJobDef != JobDefOf.Deathrest
+		&& pawn.needs?.energy is not { selfShutdown: true }
+		&& (!pawn.RaceProps.IsMechanoid || pawn.GetOverseer() == null || pawn.GetMechWorkMode() == MechWorkModeDefOf.Work);
+
+	public static void NoteBlocked(Pawn pawn) => blockedUntil[pawn.thingIDNumber] = Find.TickManager.TicksGame + BlockedRetryTicks;
+
+	private static bool IsBlocked(Pawn pawn)
+	{
+		if (!blockedUntil.TryGetValue(pawn.thingIDNumber, out var until))
+		{
+			return false;
+		}
+
+		if (Find.TickManager.TicksGame < until)
+		{
+			return true;
+		}
+
+		blockedUntil.Remove(pawn.thingIDNumber);
+		return false;
+	}
+
+	public static bool QueueUnload(Pawn pawn, bool first, bool ignoreCurrentJob = false)
+	{
+		var itemsTakenToInventory = pawn?.GetComp<CompHauledToInventory>();
 		if (itemsTakenToInventory == null)
 		{
-			return;
+			return false;
+		}
+
+		if (pawn.Faction != Faction.OfPlayerSilentFail || !Settings.IsAllowedRace(pawn.RaceProps)
+			|| pawn.Map is not { IsPlayerHome: true } || pawn.jobs == null
+			|| pawn.inventory?.innerContainer is not { Count: > 0 } inventoryContainer)
+		{
+			return false;
 		}
 
 		var carriedThing = itemsTakenToInventory.GetHashSet();
-
-		if (pawn.Faction != Faction.OfPlayerSilentFail || !Settings.IsAllowedRace(pawn.RaceProps)
-			|| carriedThing == null || carriedThing.Count == 0
-			|| pawn.inventory.innerContainer is not { } inventoryContainer || inventoryContainer.Count == 0)
+		if (carriedThing.Count == 0)
 		{
-			return;
+			return false;
 		}
 
-		if ((forced && job.TryMakePreToilReservations(pawn, false))
-			|| ((MassUtility.EncumbrancePercent(pawn) >= 0.90f || carriedThing.Count >= 1)
-			&& job.TryMakePreToilReservations(pawn, false)))
+		carriedThing.RemoveWhere(t => !inventoryContainer.Contains(t));
+		if (carriedThing.Count == 0 || !CanUnloadNow(pawn) || IsBlocked(pawn) || UnloadPending(pawn, ignoreCurrentJob))
+		{
+			return false;
+		}
+
+		var job = JobMaker.MakeJob(PickUpAndHaulJobDefOf.UnloadYourHauledInventory, pawn);
+		if (first)
 		{
 			pawn.jobs.jobQueue.EnqueueFirst(job, JobTag.Misc);
-			return;
+		}
+		else
+		{
+			pawn.jobs.jobQueue.EnqueueLast(job, JobTag.Misc);
+		}
+		return true;
+	}
+
+	private static bool UnloadPending(Pawn pawn, bool ignoreCurrentJob)
+	{
+		var curJobDef = ignoreCurrentJob ? null : pawn.CurJobDef;
+		if (curJobDef != null && (curJobDef == PickUpAndHaulJobDefOf.UnloadYourHauledInventory || curJobDef == PickUpAndHaulJobDefOf.HaulToInventory))
+		{
+			return true;
 		}
 
-		if (inventoryContainer.Count >= 1)
+		var queue = pawn.jobs.jobQueue;
+		for (var i = 0; i < queue.Count; i++)
 		{
-			for (var i = 0; i < inventoryContainer.Count; i++)
+			var queuedDef = queue[i].job?.def;
+			if (queuedDef == PickUpAndHaulJobDefOf.UnloadYourHauledInventory || queuedDef == PickUpAndHaulJobDefOf.HaulToInventory)
 			{
-				var compRottable = inventoryContainer[i].TryGetComp<CompRottable>();
-
-				if (compRottable?.TicksUntilRotAtCurrentTemp < 30000)
-				{
-					pawn.jobs.jobQueue.EnqueueFirst(job, JobTag.Misc);
-					return;
-				}
+				return true;
 			}
 		}
-
-		if (Find.TickManager.TicksGame % 50 == 0 && inventoryContainer.Count < carriedThing.Count)
-		{
-			Verse.Log.Warning("[PickUpAndHaul] " + pawn + " inventory was found out of sync with haul index. Pawn will drop their inventory.");
-			carriedThing.Clear();
-			pawn.inventory.UnloadEverything = true;
-		}
+		return false;
 	}
 }
 

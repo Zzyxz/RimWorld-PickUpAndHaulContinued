@@ -10,11 +10,31 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 
 	public override bool ShouldSkip(Pawn pawn, bool forced = false)
 		=> base.ShouldSkip(pawn, forced)
-		|| pawn.Faction != Faction.OfPlayerSilentFail
+		|| SkipsPawn(pawn);
+
+	public static bool SkipsPawn(Pawn pawn)
+		=> pawn.Faction != Faction.OfPlayerSilentFail
 		|| !Settings.IsAllowedRace(pawn.RaceProps)
 		|| pawn.GetComp<CompHauledToInventory>() == null
 		|| pawn.IsQuestLodger()
+		|| CompatHelper.CeUnsupported
 		|| OverAllowedGearCapacity(pawn);
+
+	public static float HaulCapacity(Pawn pawn) => MassUtility.Capacity(pawn) * Settings.HaulCarryFactor;
+
+	public static float FreeHaulMass(Pawn pawn) => Math.Max(0f, HaulCapacity(pawn) - MassUtility.GearAndInventoryMass(pawn));
+
+	public static int CountToHaulUntilFull(Pawn pawn, Thing thing)
+	{
+		var mass = thing.GetStatValue(StatDefOf.Mass);
+		return mass <= 0f ? thing.stackCount : Mathf.FloorToInt(FreeHaulMass(pawn) / mass);
+	}
+
+	public static bool IsCorpseBeingEaten(Thing t, Map map)
+		=> t is Corpse
+		&& map.physicalInteractionReservationManager.FirstReserverOf(t) is { } reserver
+		&& reserver.RaceProps.Animal
+		&& reserver.Faction != Faction.OfPlayer;
 
 	public static bool GoodThingToHaul(Thing t, Pawn pawn)
 		=> OkThingToHaul(t, pawn)
@@ -28,51 +48,93 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 
 	public static bool IsNotCorpseOrAllowed(Thing t) => Settings.AllowCorpses || t is not Corpse;
 
-	public override IEnumerable<Thing> PotentialWorkThingsGlobal(Pawn pawn)
+	public static bool CanHaulFast(Pawn pawn, Thing thing, bool forced, bool checkReachability)
+#if RW17
+		=> AchtungCompat.UsesAchtungCheck(pawn, forced)
+			? HaulAIUtility.PawnCanAutomaticallyHaulFast(pawn, thing, forced)
+			: HaulAIUtility.PawnCanAutomaticallyHaulFast_NewTemp(pawn, thing, forced, checkReachability);
+#else
+		=> HaulAIUtility.PawnCanAutomaticallyHaulFast(pawn, thing, forced);
+#endif
+
+	public static bool HasOtherDesignation(Thing t, DesignationManager designationManager)
 	{
-		var list = pawn.Map.listerHaulables.ThingsPotentiallyNeedingHauling().ToList();
-		Comparer.rootCell = pawn.Position;
-		list.Sort(Comparer);
-		return list;
+		var designations = designationManager.AllDesignationsOn(t);
+		for (var i = 0; i < designations.Count; i++)
+		{
+			var def = designations[i].def;
+			if (def != DesignationDefOf.Haul && def != PickUpAndHaulDesignationDefOf.haulUrgently)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
-	private static ThingPositionComparer Comparer { get; } = new();
-	public class ThingPositionComparer : IComparer<Thing>
+	public static bool IsHaulUrgently(Thing t, DesignationManager designationManager)
+		=> PickUpAndHaulDesignationDefOf.haulUrgently != null && designationManager.DesignationOn(t, PickUpAndHaulDesignationDefOf.haulUrgently) != null;
+
+	private static int[] distanceKeys = new int[0];
+
+	public override IEnumerable<Thing> PotentialWorkThingsGlobal(Pawn pawn)
 	{
-		public IntVec3 rootCell;
-		public int Compare(Thing x, Thing y) => (x.Position - rootCell).LengthHorizontalSquared.CompareTo((y.Position - rootCell).LengthHorizontalSquared);
+		var source = pawn.Map.listerHaulables.ThingsPotentiallyNeedingHauling();
+		var things = new Thing[source.Count];
+		source.CopyTo(things, 0);
+		if (distanceKeys.Length < things.Length)
+		{
+			distanceKeys = new int[things.Length];
+		}
+
+		var rootCell = pawn.Position;
+		for (var i = 0; i < things.Length; i++)
+		{
+			distanceKeys[i] = (things[i].Position - rootCell).LengthHorizontalSquared;
+		}
+		Array.Sort(distanceKeys, things, 0, things.Length);
+		return things;
 	}
 
 	public override bool HasJobOnThing(Pawn pawn, Thing thing, bool forced = false)
 		=> OkThingToHaul(thing, pawn)
 		&& IsNotCorpseOrAllowed(thing)
-		&& HaulAIUtility.PawnCanAutomaticallyHaulFast(pawn, thing, forced)
+		&& CanHaulFast(pawn, thing, forced, false)
 		&& StoreUtility.TryFindBestBetterStorageFor(thing, pawn, pawn.Map, StoreUtility.CurrentStoragePriorityOf(thing), pawn.Faction, out _, out _, false);
 
 	//bulky gear (power armor + minigun) so don't bother.
 	public static bool OverAllowedGearCapacity(Pawn pawn) => MassUtility.GearMass(pawn) / MassUtility.Capacity(pawn) >= Settings.MaximumOccupiedCapacityToConsiderHauling;
+
+	private static List<Thing> HaulablesBuffer { get; } = new();
 
 	//pick up stuff until you can't anymore,
 	//while you're up and about, pick up something and haul it
 	//before you go out, empty your pockets
 	public override Job JobOnThing(Pawn pawn, Thing thing, bool forced = false)
 	{
-		if (!OkThingToHaul(thing, pawn) || !HaulAIUtility.PawnCanAutomaticallyHaulFast(pawn, thing, forced))
+		if (HaulAIUtility.IsInHaulableInventory(thing) || CompatHelper.CeUnsupported)
+		{
+			return HaulAIUtility.PawnCanAutomaticallyHaulFast(pawn, thing, forced) ? HaulAIUtility.HaulToStorageJob(pawn, thing, forced) : null;
+		}
+
+		if (!OkThingToHaul(thing, pawn) || !HaulAIUtility.PawnCanAutomaticallyHaulFast(pawn, thing, forced) || IsCorpseBeingEaten(thing, pawn.Map))
 		{
 			return null;
 		}
+
+		var map = pawn.Map;
+		var designationManager = map.designationManager;
 
 		if (OverAllowedGearCapacity(pawn)
 			|| pawn.GetComp<CompHauledToInventory>() is null // Misc. Robots compatibility
 															 // See https://github.com/catgirlfighter/RimWorld_CommonSense/blob/master/Source/CommonSense11/CommonSense/OpportunisticTasks.cs#L129-L140
 			|| !IsNotCorpseOrAllowed(thing) //This WorkGiver gets hijacked by AllowTool and expects us to urgently haul corpses.
-			|| MassUtility.WillBeOverEncumberedAfterPickingUp(pawn, thing, 1)) //https://github.com/Mehni/PickUpAndHaul/pull/18
+			|| FreeHaulMass(pawn) < thing.GetStatValue(StatDefOf.Mass) //https://github.com/Mehni/PickUpAndHaul/pull/18
+			|| HasOtherDesignation(thing, designationManager)
+			|| (CompatHelper.IsActive && (CompatHelper.CeOverweight(pawn) || CompatHelper.CanFitInInventory(pawn, thing) <= 0)))
 		{
 			return HaulAIUtility.HaulToStorageJob(pawn, thing, forced);
 		}
 
-		var map = pawn.Map;
-		var designationManager = map.designationManager;
 		var currentPriority = StoreUtility.CurrentStoragePriorityOf(thing);
 		ThingOwner nonSlotGroupThingOwner = null;
 		StoreTarget storeTarget;
@@ -82,7 +144,7 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 			{
 				//since we've gone through all the effort of getting the loc, might as well use it.
 				//Don't multi-haul food to hoppers.
-				if (HaulToHopperJob(thing, targetCell, map))
+				if (HaulToHopperJob(thing, targetCell, map) || StackGapCompat.HasRuleAt(targetCell, map))
 				{
 					return HaulAIUtility.HaulToStorageJob(pawn, thing, forced);
 				}
@@ -122,30 +184,21 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 		Log.Message($"------------------------------------------------------------------");//different size so the log doesn't count it 2x
 		Log.Message($"{pawn} job found to haul: {thing} to {storeTarget}:{capacityStoreCell}, looking for more now");
 
-		//Find what fits in inventory, set nextThingLeftOverCount to be 
-		var nextThingLeftOverCount = 0;
-		var encumberance = MassUtility.EncumbrancePercent(pawn);
+		var freeMass = FreeHaulMass(pawn);
+		var freeBulk = CompatHelper.AvailableBulk(pawn);
 		job.targetQueueA = new List<LocalTargetInfo>(); //more things
 		job.targetQueueB = new List<LocalTargetInfo>(); //more storage; keep in mind the job doesn't use it, but reserve it so you don't over-haul
 		job.countQueue = new List<int>();//thing counts
-
-		var ceOverweight = false;
-
-		if (ModCompatibilityCheck.CombatExtendedIsActive)
-		{
-			ceOverweight = CompatHelper.CeOverweight(pawn);
-		}
 
 		var distanceToHaul = (storeTarget.Position - thing.Position).LengthHorizontal * SEARCH_FOR_OTHERS_RANGE_FRACTION;
 		var distanceToSearchMore = Math.Max(12f, distanceToHaul);
 
 		//Find extra things than can be hauled to inventory, queue to reserve them
-		var haulUrgentlyDesignation = PickUpAndHaulDesignationDefOf.haulUrgently;
-		var isUrgent = ModCompatibilityCheck.AllowToolIsActive && designationManager.DesignationOn(thing)?.def == haulUrgentlyDesignation;
+		var isUrgent = ModCompatibilityCheck.AllowToolIsActive && IsHaulUrgently(thing, designationManager);
 
-		var haulables = new List<Thing>(map.listerHaulables.ThingsPotentiallyNeedingHauling());
-		Comparer.rootCell = thing.Position;
-		haulables.Sort(Comparer);
+		var haulables = HaulablesBuffer;
+		haulables.Clear();
+		haulables.AddRange(map.listerHaulables.ThingsPotentiallyNeedingHauling());
 
 		var nextThing = thing;
 		var lastThing = thing;
@@ -167,37 +220,71 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 		}
 
 		bool Validator(Thing t)
-			=> (!isUrgent || designationManager.DesignationOn(t)?.def == haulUrgentlyDesignation)
-			&& GoodThingToHaul(t, pawn) && HaulAIUtility.PawnCanAutomaticallyHaulFast(pawn, t, false); //forced is false, may differ from first thing
-
-		haulables.Remove(thing);
+			=> t != thing
+			&& (!isUrgent || IsHaulUrgently(t, designationManager))
+			&& GoodThingToHaul(t, pawn)
+			&& !HasOtherDesignation(t, designationManager)
+			&& !IsCorpseBeingEaten(t, map)
+			&& CanHaulFast(pawn, t, false, false); //forced is false, may differ from first thing
 
 		do
 		{
+			var queued = job.countQueue.Count;
 			if (AllocateThingAtCell(storeCellCapacity, pawn, nextThing, job))
 			{
 				lastThing = nextThing;
-				encumberance += AddedEncumberance(pawn, nextThing);
+			}
 
-				if (encumberance > 1 || ceOverweight)
-				{
-					//can't CountToPickUpUntilOverEncumbered here, pawn doesn't actually hold these things yet
-					nextThingLeftOverCount = CountPastCapacity(pawn, nextThing, encumberance);
-					job.countQueue.Pop();
-					job.countQueue.Add(nextThingLeftOverCount);
-					Log.Message($"Inventory allocated, will carry {nextThing}:{nextThingLeftOverCount}");
-
-					// We are now out of inventory space - and should bail right away.
-					break;
-				}
+			if (job.countQueue.Count > queued && !FitInInventory(nextThing, job, ref freeMass, ref freeBulk))
+			{
+				// We are now out of inventory space - and should bail right away.
+				break;
 			}
 		}
 		while ((nextThing = GetClosestAndRemove(lastThing.Position, map, haulables, PathEndMode.ClosestTouch,
 			TraverseParms.For(pawn), distanceToSearchMore, Validator)) != null);
 
+		haulables.Clear();
 		skipCells = null;
 		skipThings = null;
 		return job;
+	}
+
+	private static bool FitInInventory(Thing thing, Job job, ref float freeMass, ref float freeBulk)
+	{
+		var last = job.countQueue.Count - 1;
+		var count = job.countQueue[last];
+		var mass = thing.GetStatValue(StatDefOf.Mass);
+		var bulk = CompatHelper.BulkPerItem(thing);
+
+		var fit = count;
+		if (mass > 0f)
+		{
+			fit = Math.Min(fit, (int)Math.Max(0f, freeMass / mass));
+		}
+		if (bulk > 0f && !float.IsPositiveInfinity(freeBulk))
+		{
+			fit = Math.Min(fit, (int)Math.Max(0f, freeBulk / bulk));
+		}
+
+		if (fit >= count)
+		{
+			freeMass -= count * mass;
+			freeBulk -= count * bulk;
+			return true;
+		}
+
+		if (fit <= 0 && job.targetQueueA.Count > 1)
+		{
+			job.countQueue.RemoveAt(last);
+			job.targetQueueA.RemoveAt(job.targetQueueA.Count - 1);
+		}
+		else
+		{
+			job.countQueue[last] = Math.Max(1, fit);
+		}
+		Log.Message($"Inventory allocated, will carry {thing}:{fit}");
+		return false;
 	}
 
 	private static bool HaulToHopperJob(Thing thing, IntVec3 targetCell, Map map)
@@ -374,6 +461,7 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 				if (job.targetQueueA.NullOrEmpty())
 				{
 					job.targetQueueA.Add(nextThing);
+					job.countQueue.Add(nextThing.stackCount);
 				}
 
 				return false;
@@ -448,7 +536,7 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 		{
 			storagePriority = foundCell2.GetSlotGroup(map).Settings.Priority;
 		}
-		
+
 		if (!TryFindBestBetterNonSlotGroupStorageFor(t, carrier, map, currentPriority, faction, out var haulDestination2))
 		{
 			haulDestination2 = null;
@@ -491,43 +579,60 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 	public static bool TryFindBestBetterStoreCellFor(Thing thing, Pawn carrier, Map map, StoragePriority currentPriority, Faction faction, out IntVec3 foundCell)
 	{
 		var haulDestinations = map.haulDestinationManager.AllGroupsListInPriorityOrder;
+		var origin = thing.SpawnedOrAnyParentSpawned ? thing.PositionHeld : carrier.PositionHeld;
+		var foundPriority = currentPriority;
+		var closestDistSquared = int.MaxValue;
+		foundCell = IntVec3.Invalid;
 		for (var i = 0; i < haulDestinations.Count; i++)
 		{
 			var slotGroup = haulDestinations[i];
-			if (slotGroup.Settings.Priority <= currentPriority || !slotGroup.parent.Accepts(thing))
+			var priority = slotGroup.Settings.Priority;
+			if (priority < foundPriority || priority <= currentPriority)
+			{
+				break;
+			}
+
+			if ((slotGroup.parent is Thing parentThing && parentThing.Faction != faction)
+				|| !slotGroup.parent.HaulDestinationEnabled
+				|| !slotGroup.parent.Accepts(thing))
 			{
 				continue;
 			}
 
 			var cellsList = slotGroup.CellsList;
-
+			var sampleSize = cellsList.Count / 64;
 			for (var j = 0; j < cellsList.Count; j++)
 			{
 				var cell = cellsList[j];
-				if (skipCells.Contains(cell))
+				if (cell == default || (skipCells != null && skipCells.Contains(cell)))
 				{
 					continue;
 				}
 
-				if (StoreUtility.IsGoodStoreCell(cell, map, thing, carrier, faction) && cell != default)
+				var distSquared = (origin - cell).LengthHorizontalSquared;
+				if (distSquared > closestDistSquared || !StoreUtility.IsGoodStoreCell(cell, map, thing, carrier, faction))
 				{
-					foundCell = cell;
+					continue;
+				}
 
-					skipCells.Add(cell);
-
-					return true;
+				foundCell = cell;
+				closestDistSquared = distSquared;
+				foundPriority = priority;
+				if (j >= sampleSize)
+				{
+					break;
 				}
 			}
 		}
-		foundCell = IntVec3.Invalid;
-		return false;
+
+		if (!foundCell.IsValid)
+		{
+			return false;
+		}
+
+		skipCells?.Add(foundCell);
+		return true;
 	}
-
-	public static float AddedEncumberance(Pawn pawn, Thing thing)
-		=> thing.stackCount * thing.GetStatValue(StatDefOf.Mass) / MassUtility.Capacity(pawn);
-
-	public static int CountPastCapacity(Pawn pawn, Thing thing, float encumberance)
-		=> (int)Math.Ceiling((encumberance - 1) * MassUtility.Capacity(pawn) / thing.GetStatValue(StatDefOf.Mass));
 
 	public static bool TryFindBestBetterNonSlotGroupStorageFor(Thing t, Pawn carrier, Map map, StoragePriority currentPriority, Faction faction, out IHaulDestination haulDestination, bool acceptSamePriority = false)
 	{
@@ -540,7 +645,7 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 		{
 			var iHaulDestination = allHaulDestinationsListInPriorityOrder[i];
 
-			if (iHaulDestination is ISlotGroupParent || (iHaulDestination is Building_Grave && !t.CanBeBuried()))
+			if (iHaulDestination is ISlotGroupParent || (iHaulDestination is Building_Grave && !t.CanBeBuried()) || !iHaulDestination.HaulDestinationEnabled)
 			{
 				continue;
 			}
@@ -559,12 +664,22 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 
 			if (iHaulDestination is Thing thing)
 			{
-				if (skipThings.Contains(thing) || thing.Faction != faction)
+				if ((skipThings != null && skipThings.Contains(thing)) || thing.Faction != faction)
 				{
 					continue;
 				}
 
-				if (carrier != null)
+				if (thing is IHaulEnroute enroute)
+				{
+					if (!map.reservationManager.OnlyReservationsForJobDef(thing, JobDefOf.HaulToContainer)
+						|| enroute.GetSpaceRemainingWithEnroute(t.def) <= 0
+						|| (carrier != null && (thing.IsForbidden(carrier)
+							|| !carrier.Map.reachability.CanReach(intVec, thing, PathEndMode.ClosestTouch, TraverseParms.For(carrier)))))
+					{
+						continue;
+					}
+				}
+				else if (carrier != null)
 				{
 					if (thing.IsForbidden(carrier)
 						|| !carrier.CanReserveNew(thing)
@@ -580,8 +695,6 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 						continue;
 					}
 				}
-
-				skipThings.Add(thing);
 			}
 			else
 			{
@@ -597,6 +710,10 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 			haulDestination = iHaulDestination;
 		}
 
+		if (haulDestination is Thing chosen)
+		{
+			skipThings?.Add(chosen);
+		}
 		return haulDestination != null;
 	}
 }
