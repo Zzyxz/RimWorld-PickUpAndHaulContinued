@@ -3,6 +3,7 @@
 	<name>Pick Up and Haul - Reworked</name>
 	<author>Zzyxzz</author>
 	<packageId>Zzyxzz.PickUpAndHaulReworked</packageId>
+	<url>https://github.com/Zzyxz/RimWorld-PickUpAndHaulReworked</url>
 	<modVersion>0.3.0</modVersion>
 	<supportedVersions>
 		<li>1.6</li>
@@ -28,5 +29,7 @@ A reworked version of Pick Up And Haul by Mehni for RimWorld 1.6 and 1.7. It fix
 
 Use it instead of the original, not together with it. Existing saves keep working when you swap.
 
-Original mod by Mehni, with code from AlexTD, Angelin01, Bradson, simplyWiri, erdelf, Zorba, Why_is_that, Dingo, CodeOptimist, Hanabishi, Madara Uchiha, Ragnar-F and bananasss00. Kept running by Mlie. Released under the MIT licence.</description>
+Original mod by Mehni, with code from AlexTD, Angelin01, Bradson, simplyWiri, erdelf, Zorba, Why_is_that, Dingo, CodeOptimist, Hanabishi, Madara Uchiha, Ragnar-F and bananasss00. Kept running by Mlie. Released under the MIT licence.
+
+Source code: https://github.com/Zzyxz/RimWorld-PickUpAndHaulReworked</description>
 </ModMetaData>
