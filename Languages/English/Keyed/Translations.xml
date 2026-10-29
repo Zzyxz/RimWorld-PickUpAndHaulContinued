@@ -4,9 +4,13 @@
 	<PUAH.allowCorpses>Allow putting corpses into inventory</PUAH.allowCorpses>
 	<PUAH.allowCorpsesTooltip>Default Off. Only carry those directly in hands instead.</PUAH.allowCorpsesTooltip>
 	<PUAH.allowAnimals>Allow tamed pack animals using their inventory for hauling</PUAH.allowAnimals>
-	<PUAH.allowAnimalsTooltip>Default On. Works best with mods that give backpacks to more animals, like VFME Caravan Packs</PUAH.allowAnimalsTooltip>
+	<PUAH.allowAnimalsTooltip>Default On. Only pack animals can carry things in their inventory. Other animals keep hauling one stack at a time. Works best with mods that give backpacks to more animals, like VFME Caravan Packs</PUAH.allowAnimalsTooltip>
 	<PUAH.allowMechanoids>Allow hacked mechanoids using their inventory for hauling</PUAH.allowMechanoids>
 	<PUAH.allowMechanoidsTooltip>Requires What The Hack or similar mods. Default On.</PUAH.allowMechanoidsTooltip>
+	<PUAH.haulCarryLimit>Carry limit for hauling</PUAH.haulCarryLimit>
+	<PUAH.haulCarryLimitTooltip>How much colonists may carry for a hauling trip, as a share of their normal carry limit. Above 100% they walk slower until they unload. Default 130%.</PUAH.haulCarryLimitTooltip>
+	<PUAH.dropHauledWhenDrafted>Drop hauled items when drafted</PUAH.dropHauledWhenDrafted>
+	<PUAH.dropHauledWhenDraftedTooltip>Drafted colonists drop what they were hauling so they don't go into a fight overloaded. Their own gear stays with them. Default On.</PUAH.dropHauledWhenDraftedTooltip>
 	<PUAH.minimumFreeInventorySpace>Minimum free inventory space to consider hauling to inventory</PUAH.minimumFreeInventorySpace>
 	<PUAH.minimumFreeInventorySpaceTooltip>Pawns with less free inventory space than defined here just directly use vanilla hauling. 0% makes them always try hauling to inventory, regardless of them having room for more than one potato or not. 100% results in PUAH requiring pawns to be completely naked. Default 20%</PUAH.minimumFreeInventorySpaceTooltip>
 </LanguageData>
