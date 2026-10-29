@@ -25,7 +25,7 @@
 	</incompatibleWith>
 	<description>Colonists pick up several things into their inventory and haul them to a stockpile in one trip.
 
-A reworked version of Pick Up And Haul by Mehni for RimWorld 1.6 and 1.7. It fixes many bugs of the original, works with Combat Extended again and searches faster in big colonies. Colonists keep their own supplies apart from what they haul.
+A reworked version of Pick Up And Haul by Mehni for RimWorld 1.6 and 1.7. It fixes many bugs of the original and works with Combat Extended again. Colonists keep their own supplies apart from what they haul. Stack Gap, Simple Baby Carry and Achtung are supported, even though they only look for the original mod.
 
 Use it instead of the original, not together with it. Existing saves keep working when you swap.
 
