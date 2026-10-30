@@ -6,6 +6,7 @@ public class JobDriver_HaulToInventory : JobDriver
 	public override bool TryMakePreToilReservations(bool errorOnFailed)
 	{
 		Log.Message($"{pawn} starting HaulToInventory job: {job.targetQueueA.ToStringSafeEnumerable()}:{job.countQueue.ToStringSafeEnumerable()}");
+		RequeueCurrentTarget();
 		DropUnreservableQueuedTargets();
 		var first = job.targetQueueA.NullOrEmpty() ? job.targetA : job.targetQueueA[0];
 		if (!first.HasThing || !first.Thing.Spawned || !pawn.Reserve(first, job, errorOnFailed: errorOnFailed))
@@ -32,6 +33,23 @@ public class JobDriver_HaulToInventory : JobDriver
 			}
 		}
 		return true;
+	}
+
+	private void RequeueCurrentTarget()
+	{
+		var current = job.targetA;
+		var targets = job.targetQueueA;
+		if (targets == null || !current.HasThing || !current.Thing.Spawned || targets.Contains(current))
+		{
+			return;
+		}
+
+		var counts = job.countQueue;
+		if (counts != null && counts.Count == targets.Count)
+		{
+			counts.Insert(0, job.count > 0 ? job.count : current.Thing.stackCount);
+		}
+		targets.Insert(0, current);
 	}
 
 	private void DropUnreservableQueuedTargets()
