@@ -4,11 +4,13 @@ public class JobDriver_UnloadYourHauledInventory : JobDriver
 {
 	private int _countToDrop = -1;
 	private int _unloadDuration = 3;
+	private Thing _pulledThing;
 
 	public override void ExposeData()
 	{
 		base.ExposeData();
 		Scribe_Values.Look<int>(ref _countToDrop, "countToDrop", -1);
+		Scribe_References.Look(ref _pulledThing, "pulledThing");
 	}
 
 	public override bool TryMakePreToilReservations(bool errorOnFailed) => job.playerForced || PawnUnloadChecker.CanUnloadNow(pawn);
@@ -30,6 +32,7 @@ public class JobDriver_UnloadYourHauledInventory : JobDriver
 			{
 				PawnUnloadChecker.NoteBlocked(pawn);
 			}
+			ReturnPulledThing();
 		});
 
 		var begin = Toils_General.Wait(_unloadDuration);
@@ -63,6 +66,36 @@ public class JobDriver_UnloadYourHauledInventory : JobDriver
 	}
 
 	private bool TargetIsCell() => !TargetB.HasThing;
+
+	private void ReturnPulledThing()
+	{
+		var pulled = _pulledThing;
+		_pulledThing = null;
+		if (pulled == null || pulled.Destroyed)
+		{
+			return;
+		}
+
+		if (pulled.Spawned)
+		{
+			PawnUnloadChecker.MarkForHauling(pulled);
+			return;
+		}
+
+		if (pawn.Dead || pawn.carryTracker?.CarriedThing != pulled || pawn.inventory == null)
+		{
+			return;
+		}
+
+		if (pawn.carryTracker.innerContainer.TryTransferToContainer(pulled, pawn.inventory.innerContainer, pulled.stackCount, out var back, false) > 0 && back != null)
+		{
+			pawn.TryGetComp<CompHauledToInventory>()?.RegisterHauledItem(back);
+			if (ModCompatibilityCheck.CombatExtendedIsActive)
+			{
+				CompatHelper.UpdateInventory(pawn);
+			}
+		}
+	}
 
 	private Toil ReleaseReservation()
 	{
@@ -116,6 +149,7 @@ public class JobDriver_UnloadYourHauledInventory : JobDriver
 					return;
 				}
 
+				_pulledThing = carried;
 				job.count = carried.stackCount;
 				job.SetTarget(TargetIndex.A, carried);
 				carriedThings.Remove(carried);
