@@ -91,7 +91,7 @@ static class HarmonyPatches
 			return;
 		}
 
-		if (!Settings.DropHauledWhenDrafted)
+		if (!Settings.DropHauledWhenDrafted || !pawn.RaceProps.Humanlike)
 		{
 			return;
 		}
