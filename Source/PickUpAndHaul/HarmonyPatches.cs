@@ -107,7 +107,8 @@ static class HarmonyPatches
 		{
 			if (!thing.Destroyed && inventory.Contains(thing))
 			{
-				inventory.TryDrop(thing, pawn.Position, pawn.Map, ThingPlaceMode.Near, thing.stackCount, out _);
+				inventory.TryDrop(thing, pawn.Position, pawn.Map, ThingPlaceMode.Near, thing.stackCount, out var dropped);
+				PawnUnloadChecker.MarkForHauling(dropped);
 			}
 		}
 		hauled.RemoveWhere(thing => thing.Destroyed || !inventory.Contains(thing));

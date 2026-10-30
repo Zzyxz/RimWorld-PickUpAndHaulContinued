@@ -19,6 +19,20 @@ public class PawnUnloadChecker
 
 	public static void NoteBlocked(Pawn pawn) => blockedUntil[pawn.thingIDNumber] = Find.TickManager.TicksGame + BlockedRetryTicks;
 
+	public static void MarkForHauling(Thing thing)
+	{
+		if (thing is not { Spawned: true } || thing.def.alwaysHaulable || !thing.def.EverHaulable || thing.IsInAnyStorage())
+		{
+			return;
+		}
+
+		var designationManager = thing.Map.designationManager;
+		if (designationManager.DesignationOn(thing, DesignationDefOf.Haul) == null)
+		{
+			designationManager.AddDesignation(new Designation(thing, DesignationDefOf.Haul));
+		}
+	}
+
 	private static bool IsBlocked(Pawn pawn)
 	{
 		if (!blockedUntil.TryGetValue(pawn.thingIDNumber, out var until))

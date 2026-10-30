@@ -223,7 +223,8 @@ public class JobDriver_HaulToInventory : JobDriver
 		}
 		else
 		{
-			GenPlace.TryPlaceThing(splitThing, actor.Position, actor.Map, ThingPlaceMode.Near);
+			GenPlace.TryPlaceThing(splitThing, actor.Position, actor.Map, ThingPlaceMode.Near, out var placed);
+			PawnUnloadChecker.MarkForHauling(placed);
 		}
 	}
 

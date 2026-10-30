@@ -100,6 +100,7 @@ public class JobDriver_UnloadYourHauledInventory : JobDriver
 					pawn.inventory.innerContainer.TryDrop(thing, ThingPlaceMode.Near, thing.stackCount, out var dropped);
 					carriedThings.Remove(thing);
 					dropped?.SetForbidden(false, false);
+					PawnUnloadChecker.MarkForHauling(dropped);
 					if (ModCompatibilityCheck.CombatExtendedIsActive)
 					{
 						CompatHelper.UpdateInventory(pawn);
@@ -147,7 +148,8 @@ public class JobDriver_UnloadYourHauledInventory : JobDriver
 		}
 		else
 		{
-			pawn.carryTracker.TryDropCarriedThing(pawn.Position, ThingPlaceMode.Near, out _);
+			pawn.carryTracker.TryDropCarriedThing(pawn.Position, ThingPlaceMode.Near, out var dropped);
+			PawnUnloadChecker.MarkForHauling(dropped);
 		}
 	}
 
@@ -216,7 +218,8 @@ public class JobDriver_UnloadYourHauledInventory : JobDriver
 	{
 		if (pawn.Map.IsPlayerHome)
 		{
-			pawn.inventory.innerContainer.TryDrop(thing, ThingPlaceMode.Near, thing.stackCount, out _);
+			pawn.inventory.innerContainer.TryDrop(thing, ThingPlaceMode.Near, thing.stackCount, out var dropped);
+			PawnUnloadChecker.MarkForHauling(dropped);
 			carriedThings.Remove(thing);
 			EndJobWith(condition);
 		}
