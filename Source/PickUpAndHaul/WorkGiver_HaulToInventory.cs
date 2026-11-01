@@ -225,6 +225,7 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 			&& GoodThingToHaul(t, pawn)
 			&& !HasOtherDesignation(t, designationManager)
 			&& !IsCorpseBeingEaten(t, map)
+			&& !CartCompat.IsCartCargo(t)
 			&& CanHaulFast(pawn, t, false, false); //forced is false, may differ from first thing
 
 		do
