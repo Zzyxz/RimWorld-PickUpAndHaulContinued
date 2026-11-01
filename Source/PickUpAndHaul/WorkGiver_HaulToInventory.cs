@@ -247,6 +247,10 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 		haulables.Clear();
 		skipCells = null;
 		skipThings = null;
+		if (job.targetQueueA.Count > 0)
+		{
+			job.targetA = job.targetQueueA[0];
+		}
 		return job;
 	}
 
