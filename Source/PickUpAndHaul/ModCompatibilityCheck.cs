@@ -13,6 +13,8 @@ public static class ModCompatibilityCheck
 
 	public static bool StackGapIsActive { get; } = IsActive("andromeda.stackgap");
 
+	public static bool CartModIsActive { get; } = IsActive("tbmr.mutuiche");
+
 	public static bool ExtendedStorageIsActive
 	{
 		get;

@@ -100,7 +100,8 @@ public class PawnUnloadChecker
 		for (var i = 0; i < queue.Count; i++)
 		{
 			var queuedDef = queue[i].job?.def;
-			if (queuedDef == PickUpAndHaulJobDefOf.UnloadYourHauledInventory || queuedDef == PickUpAndHaulJobDefOf.HaulToInventory)
+			if (queuedDef == PickUpAndHaulJobDefOf.UnloadYourHauledInventory
+				|| (queuedDef == PickUpAndHaulJobDefOf.HaulToInventory && !ModCompatibilityCheck.CartModIsActive))
 			{
 				return true;
 			}

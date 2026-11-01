@@ -235,6 +235,7 @@ public class JobDriver_HaulToInventory : JobDriver
 			return false;
 		}
 
+		job.workGiverDef ??= actor.CurJob?.workGiverDef;
 		if (job.TryMakePreToilReservations(actor, false))
 		{
 			actor.jobs.jobQueue.EnqueueFirst(job, JobTag.Misc);
@@ -306,6 +307,10 @@ public class JobDriver_HaulToInventory : JobDriver
 
 				attempts++;
 				found = HaulMoreWorker.JobOnThing(pawn, candidate);
+				if (found != null)
+				{
+					found.workGiverDef ??= HaulMoreWorker.def;
+				}
 			}
 		}
 
