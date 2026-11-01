@@ -121,6 +121,7 @@ public class JobDriver_UnloadYourHauledInventory : JobDriver
 				if (thing == null || !pawn.inventory.innerContainer.Contains(thing))
 				{
 					carriedThings.Remove(thing);
+					PawnUnloadChecker.MarkForHauling(thing);
 					pawn.jobs.curDriver.JumpToToil(wait);
 					return;
 				}

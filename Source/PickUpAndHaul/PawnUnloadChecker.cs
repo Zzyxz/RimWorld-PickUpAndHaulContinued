@@ -21,7 +21,8 @@ public class PawnUnloadChecker
 
 	public static void MarkForHauling(Thing thing)
 	{
-		if (thing is not { Spawned: true } || thing.def.alwaysHaulable || !thing.def.EverHaulable || thing.IsInAnyStorage())
+		if (thing is not { Spawned: true } || thing.def.alwaysHaulable || !thing.def.EverHaulable || thing.IsInAnyStorage()
+			|| thing.IsForbidden(Faction.OfPlayer))
 		{
 			return;
 		}
