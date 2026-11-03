@@ -28,6 +28,16 @@ static class HarmonyPatches
 		harmony.Patch(original: AccessTools.Method(typeof(JobGiver_DropUnusedInventory), nameof(JobGiver_DropUnusedInventory.TryGiveJob)),
 			postfix: new HarmonyMethod(typeof(HarmonyPatches), nameof(DropUnusedInventory_PostFix)));
 
+		try
+		{
+			harmony.Patch(AccessTools.DeclaredMethod(typeof(JobGiver_Work), nameof(JobGiver_Work.TryIssueJobPackage), new[] { typeof(Pawn), typeof(JobIssueParams) }) ?? throw new MissingMethodException(nameof(JobGiver_Work.TryIssueJobPackage)),
+				prefix: new HarmonyMethod(typeof(HarmonyPatches), nameof(MechWorkUnload_Prefix)));
+		}
+		catch (Exception)
+		{
+			Verse.Log.Warning("Pick Up and Haul - Continued: mech deliveries could not be enabled. Hauled items may remain in inventory.");
+		}
+
 		harmony.Patch(original: AccessTools.Method(typeof(JobDriver_HaulToCell), nameof(JobDriver_HaulToCell.MakeNewToils)),
 			postfix: new HarmonyMethod(typeof(HarmonyPatches), nameof(JobDriver_HaulToCell_PostFix)));
 
@@ -270,6 +280,23 @@ static class HarmonyPatches
 	}
 
 	public static void DropUnusedInventory_PostFix(Pawn pawn) => PawnUnloadChecker.CheckIfPawnShouldUnloadInventory(pawn);
+
+	private static bool MechWorkUnload_Prefix(JobGiver_Work __instance, Pawn pawn, ref ThinkResult __result)
+	{
+		if (__instance.emergency || !pawn.RaceProps.IsMechanoid || pawn.CurJob != null)
+		{
+			return true;
+		}
+
+		var job = PawnUnloadChecker.TryMakeUnloadJob(pawn);
+		if (job == null)
+		{
+			return true;
+		}
+
+		__result = new ThinkResult(job, __instance, JobTag.Misc);
+		return false;
+	}
 
 	public static bool MaxAllowedToPickUpPrefix(Pawn pawn, ref int __result)
 	{

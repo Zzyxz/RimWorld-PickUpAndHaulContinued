@@ -52,32 +52,12 @@ public class PawnUnloadChecker
 
 	public static bool QueueUnload(Pawn pawn, bool first, bool ignoreCurrentJob = false)
 	{
-		var itemsTakenToInventory = pawn?.GetComp<CompHauledToInventory>();
-		if (itemsTakenToInventory == null)
+		var job = TryMakeUnloadJob(pawn, ignoreCurrentJob);
+		if (job == null)
 		{
 			return false;
 		}
 
-		if (pawn.Faction != Faction.OfPlayerSilentFail || !Settings.IsAllowedRace(pawn.RaceProps)
-			|| pawn.Map is not { IsPlayerHome: true } || pawn.jobs == null
-			|| pawn.inventory?.innerContainer is not { Count: > 0 } inventoryContainer)
-		{
-			return false;
-		}
-
-		var carriedThing = itemsTakenToInventory.GetHashSet();
-		if (carriedThing.Count == 0)
-		{
-			return false;
-		}
-
-		carriedThing.RemoveWhere(t => !inventoryContainer.Contains(t));
-		if (carriedThing.Count == 0 || !CanUnloadNow(pawn) || IsBlocked(pawn) || UnloadPending(pawn, ignoreCurrentJob))
-		{
-			return false;
-		}
-
-		var job = JobMaker.MakeJob(PickUpAndHaulJobDefOf.UnloadYourHauledInventory, pawn);
 		if (first)
 		{
 			pawn.jobs.jobQueue.EnqueueFirst(job, JobTag.Misc);
@@ -88,6 +68,39 @@ public class PawnUnloadChecker
 		}
 		return true;
 	}
+
+	internal static Job TryMakeUnloadJob(Pawn pawn, bool ignoreCurrentJob = false)
+	{
+		var itemsTakenToInventory = pawn?.GetComp<CompHauledToInventory>();
+		if (itemsTakenToInventory == null)
+		{
+			return null;
+		}
+
+		if (pawn.Faction != Faction.OfPlayerSilentFail || !Settings.IsAllowedRace(pawn.RaceProps)
+			|| pawn.Map is not { IsPlayerHome: true } || pawn.jobs == null
+			|| pawn.inventory?.innerContainer is not { Count: > 0 } inventoryContainer)
+		{
+			return null;
+		}
+
+		var carriedThing = itemsTakenToInventory.GetHashSet();
+		if (carriedThing.Count == 0)
+		{
+			return null;
+		}
+
+		RemoveMissing(carriedThing, inventoryContainer);
+		if (carriedThing.Count == 0 || !CanUnloadNow(pawn) || IsBlocked(pawn) || UnloadPending(pawn, ignoreCurrentJob))
+		{
+			return null;
+		}
+
+		return JobMaker.MakeJob(PickUpAndHaulJobDefOf.UnloadYourHauledInventory, pawn);
+	}
+
+	private static void RemoveMissing(HashSet<Thing> carriedThing, ThingOwner inventoryContainer)
+		=> carriedThing.RemoveWhere(t => !inventoryContainer.Contains(t));
 
 	private static bool UnloadPending(Pawn pawn, bool ignoreCurrentJob)
 	{
