@@ -6,6 +6,20 @@ public class PawnUnloadChecker
 	private const int BlockedRetryTicks = 750;
 
 	private static readonly Dictionary<int, int> blockedUntil = new();
+	private static Game blockedGame;
+
+	private static Dictionary<int, int> BlockedUntil
+	{
+		get
+		{
+			if (blockedGame != Current.Game)
+			{
+				blockedUntil.Clear();
+				blockedGame = Current.Game;
+			}
+			return blockedUntil;
+		}
+	}
 
 	public static void CheckIfPawnShouldUnloadInventory(Pawn pawn, bool forced = false) => QueueUnload(pawn, true);
 
@@ -17,7 +31,7 @@ public class PawnUnloadChecker
 		&& pawn.needs?.energy is not { selfShutdown: true }
 		&& (!pawn.RaceProps.IsMechanoid || pawn.GetOverseer() == null || pawn.GetMechWorkMode() == MechWorkModeDefOf.Work);
 
-	public static void NoteBlocked(Pawn pawn) => blockedUntil[pawn.thingIDNumber] = Find.TickManager.TicksGame + BlockedRetryTicks;
+	public static void NoteBlocked(Pawn pawn) => BlockedUntil[pawn.thingIDNumber] = Find.TickManager.TicksGame + BlockedRetryTicks;
 
 	public static void MarkForHauling(Thing thing)
 	{
@@ -36,7 +50,8 @@ public class PawnUnloadChecker
 
 	private static bool IsBlocked(Pawn pawn)
 	{
-		if (!blockedUntil.TryGetValue(pawn.thingIDNumber, out var until))
+		var blocked = BlockedUntil;
+		if (!blocked.TryGetValue(pawn.thingIDNumber, out var until))
 		{
 			return false;
 		}
@@ -46,7 +61,7 @@ public class PawnUnloadChecker
 			return true;
 		}
 
-		blockedUntil.Remove(pawn.thingIDNumber);
+		blocked.Remove(pawn.thingIDNumber);
 		return false;
 	}
 
